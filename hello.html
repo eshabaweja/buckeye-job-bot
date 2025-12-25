@@ -107,6 +107,16 @@
     </div>
 
     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
+      <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Resume Upload:</div>
+      <input type="file" id="resumeFile" accept=".pdf,.doc,.docx" style="display: none;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <button id="selectResume" class="button-secondary" style="margin-top: 0;">Select Resume</button>
+        <span id="resumeFileName" style="font-size: 12px; color: #666; flex: 1;">No resume selected</span>
+      </div>
+      <div id="resumeStatus" style="font-size: 11px; color: #666; margin-top: 4px;"></div>
+    </div>
+
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
       <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Current Tab Actions:</div>
       <button id="clickApply" class="button-secondary">Click Apply Button</button>
     </div>

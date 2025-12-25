@@ -1,10 +1,11 @@
 # AI4SE - using AI in the SDLC
 - tried using Opus 4.5 on Cursor, it didn't work. Could not automate a button click on 'Apply'
-- Reading up on MCP and context7
+- Reading up on Model Context Protocol (MCP) and context7
 - Using https://context7.com/puppeteer/puppeteer with Cursor
 - error detected by programmer: Apply button did not click. The issue might be that after the link opens, the extension closes/disappears
 - error was fed into Cursor. It generated new code, which still did not work. Provided more context (Copied the Button element's HTML)
-- New code with service worker inspect view gave error: ```
+- New code with service worker inspect view gave error: 
+```
 background.js:36 Background: First attempt failed, retrying... Could not establish connection. Receiving end does not exist.
 background.js:44 Background: Retry also failed: Error: Could not establish connection. Receiving end does not exist.
 (anonymous) @ background.js:44
@@ -49,3 +50,8 @@ setTimeout
 listener @ background.js:72
 ```
 - The URL uses myworkday.com (not myworkdayjobs.com), which isn't in the manifest permissions. Updating the manifest to include myworkday.com made it work!
+- Next: upload resume on Quick Apply, then click Next
+- No inputs on My Experience page, click Next again
+- My Experience page: Detects the page using [data-automation-id="taskOrchCurrentItemLabel"] → clicks Next
+- Application Questions page asks: Are you an employee of OSU and Are you a student at OSU? Must answer using answers to those questions from local storage
+- 

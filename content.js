@@ -207,11 +207,303 @@ async function clickApplyButton() {
   }
 }
 
+// Function to find file input for resume upload
+function findResumeFileInput() {
+  // Common selectors for file inputs in Workday
+  const selectors = [
+    'input[type="file"]',
+    'input[accept*="pdf"]',
+    'input[accept*="doc"]',
+    'input[data-automation-id*="resume"]',
+    'input[data-automation-id*="file"]',
+    'input[aria-label*="resume"]',
+    'input[aria-label*="Resume"]',
+    'input[aria-label*="file"]',
+    'input[aria-label*="File"]'
+  ];
+  
+  for (const selector of selectors) {
+    try {
+      const input = document.querySelector(selector);
+      if (input && input.type === 'file') {
+        return input;
+      }
+    } catch (e) {
+      // Invalid selector, continue
+    }
+  }
+  
+  // Search all file inputs
+  const allFileInputs = document.querySelectorAll('input[type="file"]');
+  for (const input of allFileInputs) {
+    const label = input.getAttribute('aria-label')?.toLowerCase() || '';
+    const accept = input.getAttribute('accept')?.toLowerCase() || '';
+    if (label.includes('resume') || label.includes('file') || accept.includes('pdf') || accept.includes('doc')) {
+      return input;
+    }
+  }
+  
+  return allFileInputs.length > 0 ? allFileInputs[0] : null;
+}
+
+// Function to find Next button
+function findNextButton() {
+  const selectors = [
+    'button[data-automation-id*="next"]',
+    'button[aria-label*="Next"]',
+    'button[aria-label*="next"]',
+    'button:contains("Next")',
+    'button[title="Next"]'
+  ];
+  
+  for (const selector of selectors) {
+    try {
+      const button = document.querySelector(selector);
+      if (button) {
+        const text = (button.textContent || '').trim().toLowerCase();
+        const ariaLabel = (button.getAttribute('aria-label') || '').toLowerCase();
+        if (text.includes('next') || ariaLabel.includes('next')) {
+          return button;
+        }
+      }
+    } catch (e) {
+      // Invalid selector, continue
+    }
+  }
+  
+  // Search all buttons
+  const allButtons = document.querySelectorAll('button');
+  for (const button of allButtons) {
+    const text = (button.textContent || '').trim().toLowerCase();
+    const ariaLabel = (button.getAttribute('aria-label') || '').toLowerCase();
+    if ((text === 'next' || text.includes('next')) && !text.includes('previous')) {
+      return button;
+    }
+    if (ariaLabel.includes('next') && !ariaLabel.includes('previous')) {
+      return button;
+    }
+  }
+  
+  return null;
+}
+
+// Function to upload resume and click next
+async function uploadResumeAndContinue() {
+  try {
+    // Get stored resume from storage
+    const result = await chrome.storage.local.get(['resumeFileData']);
+    if (!result.resumeFileData) {
+      return {
+        success: false,
+        message: 'No resume file stored. Please upload a resume in the extension popup.'
+      };
+    }
+    
+    const resumeData = result.resumeFileData;
+    console.log('Workday Extension: Found stored resume:', resumeData.name);
+    
+    // Find file input
+    const fileInput = findResumeFileInput();
+    if (!fileInput) {
+      return {
+        success: false,
+        message: 'Resume file input not found on this page'
+      };
+    }
+    
+    console.log('Workday Extension: Found file input');
+    
+    // Convert base64 data URL to File object
+    const base64Data = resumeData.data.split(',')[1]; // Remove data:type;base64, prefix
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const file = new File([byteArray], resumeData.name, { type: resumeData.type });
+    
+    // Create a DataTransfer object to set files
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    fileInput.files = dataTransfer.files;
+    
+    // Trigger change event
+    const changeEvent = new Event('change', { bubbles: true });
+    fileInput.dispatchEvent(changeEvent);
+    
+    // Also trigger input event
+    const inputEvent = new Event('input', { bubbles: true });
+    fileInput.dispatchEvent(inputEvent);
+    
+    console.log('Workday Extension: Resume file uploaded');
+    
+    // Wait a bit for the file to process
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Find and click Next button
+    const nextButton = findNextButton();
+    if (!nextButton) {
+      return {
+        success: true,
+        message: 'Resume uploaded successfully, but Next button not found'
+      };
+    }
+    
+    console.log('Workday Extension: Found Next button, clicking...');
+    
+    // Scroll into view
+    nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Click the button
+    nextButton.click();
+    
+    // Also dispatch mouse events
+    const mouseEvents = ['mousedown', 'mouseup', 'click'];
+    mouseEvents.forEach(eventType => {
+      const event = new MouseEvent(eventType, {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      });
+      nextButton.dispatchEvent(event);
+    });
+    
+    console.log('Workday Extension: Next button clicked on Quick Apply page');
+    
+    // After clicking Next on Quick Apply, wait for navigation to My Experience page
+    // Then automatically click Next there
+    setTimeout(() => {
+      // Check periodically for My Experience page (up to 15 seconds)
+      let attempts = 0;
+      const maxAttempts = 30; // 30 attempts * 500ms = 15 seconds
+      
+      const checkForMyExperience = setInterval(() => {
+        attempts++;
+        // Look for the specific "My Experience" indicator element
+        const myExperienceIndicator = document.querySelector('[data-automation-id="taskOrchCurrentItemLabel"]');
+        const isMyExperience = myExperienceIndicator && 
+          myExperienceIndicator.textContent?.trim() === 'My Experience';
+        
+        if (isMyExperience) {
+          const nextButton = findNextButton();
+          if (nextButton) {
+            clearInterval(checkForMyExperience);
+            console.log('Workday Extension: Detected My Experience page after Quick Apply, clicking Next...');
+            
+            // Scroll and click Next button
+            nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+              nextButton.click();
+              
+              // Also dispatch mouse events
+              const mouseEvents = ['mousedown', 'mouseup', 'click'];
+              mouseEvents.forEach(eventType => {
+                const event = new MouseEvent(eventType, {
+                  view: window,
+                  bubbles: true,
+                  cancelable: true
+                });
+                nextButton.dispatchEvent(event);
+              });
+              
+              console.log('Workday Extension: Next button clicked on My Experience page');
+            }, 500);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(checkForMyExperience);
+            console.log('Workday Extension: My Experience page detected but Next button not found');
+          }
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkForMyExperience);
+          console.log('Workday Extension: Timeout waiting for My Experience page');
+        }
+      }, 500);
+    }, 2000); // Wait 2 seconds after clicking Next on Quick Apply
+    
+    return {
+      success: true,
+      message: 'Resume uploaded and Next button clicked successfully'
+    };
+  } catch (error) {
+    console.error('Workday Extension: Error uploading resume:', error);
+    return {
+      success: false,
+      message: `Error: ${error.message}`
+    };
+  }
+}
+
+// Auto-detect Quick Apply page and upload resume
+function checkAndHandleQuickApplyPage() {
+  // Check if we're on a Quick Apply page (look for file input or specific indicators)
+  const fileInput = findResumeFileInput();
+  if (fileInput) {
+    console.log('Workday Extension: Detected Quick Apply page');
+    // Wait a bit for page to be fully ready
+    setTimeout(async () => {
+      const result = await uploadResumeAndContinue();
+      console.log('Workday Extension: Quick Apply result:', result);
+    }, 2000);
+    return true;
+  }
+  return false;
+}
+
+// Auto-detect My Experience page and click Next
+function checkAndHandleMyExperiencePage() {
+  // Look for the specific "My Experience" indicator element
+  const myExperienceIndicator = document.querySelector('[data-automation-id="taskOrchCurrentItemLabel"]');
+  
+  // Check if the indicator exists and contains "My Experience"
+  const isMyExperiencePage = myExperienceIndicator && 
+    myExperienceIndicator.textContent?.trim() === 'My Experience';
+  
+  if (isMyExperiencePage) {
+    console.log('Workday Extension: Detected My Experience page');
+    // Wait a bit for page to be fully ready
+    setTimeout(async () => {
+      const nextButton = findNextButton();
+      if (nextButton) {
+        console.log('Workday Extension: Found Next button on My Experience page');
+        nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Click the button
+        nextButton.click();
+        
+        // Also dispatch mouse events
+        const mouseEvents = ['mousedown', 'mouseup', 'click'];
+        mouseEvents.forEach(eventType => {
+          const event = new MouseEvent(eventType, {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          });
+          nextButton.dispatchEvent(event);
+        });
+        
+        console.log('Workday Extension: Next button clicked on My Experience page');
+      } else {
+        console.log('Workday Extension: Next button not found on My Experience page');
+      }
+    }, 2000);
+    return true;
+  }
+  return false;
+}
+
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'clickApply') {
     clickApplyButton().then(result => {
       sendResponse(result);
+      // After clicking apply, check if we're on Quick Apply page or My Experience page
+      setTimeout(() => {
+        if (!checkAndHandleQuickApplyPage()) {
+          checkAndHandleMyExperiencePage();
+        }
+      }, 3000);
     }).catch(error => {
       sendResponse({
         success: false,
@@ -219,6 +511,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     });
     return true; // Keep channel open for async response
+  }
+  
+  if (request.action === 'uploadResume') {
+    uploadResumeAndContinue().then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      sendResponse({
+        success: false,
+        message: `Error: ${error.message}`
+      });
+    });
+    return true;
   }
   
   if (request.action === 'findApplyButton') {
@@ -247,6 +551,28 @@ window.addEventListener('load', () => {
     } else {
       console.log('Workday Extension: Apply button not found on this page');
     }
+    
+    // Check for Quick Apply page first, then My Experience page
+    if (!checkAndHandleQuickApplyPage()) {
+      checkAndHandleMyExperiencePage();
+    }
   }, 1000);
 });
+
+// Also check when DOM is ready (in case load event already fired)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      if (!checkAndHandleQuickApplyPage()) {
+        checkAndHandleMyExperiencePage();
+      }
+    }, 2000);
+  });
+} else {
+  setTimeout(() => {
+    if (!checkAndHandleQuickApplyPage()) {
+      checkAndHandleMyExperiencePage();
+    }
+  }, 2000);
+}
 

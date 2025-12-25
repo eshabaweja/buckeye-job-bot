@@ -283,15 +283,94 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// Resume management functions
+async function loadResume() {
+  try {
+    const result = await chrome.storage.local.get(['resumeFileName', 'resumeFileData']);
+    if (result.resumeFileName) {
+      document.getElementById('resumeFileName').textContent = result.resumeFileName;
+      document.getElementById('resumeStatus').textContent = 'Resume saved and ready';
+      document.getElementById('resumeStatus').style.color = '#155724';
+    }
+  } catch (error) {
+    console.error('Error loading resume:', error);
+  }
+}
+
+async function saveResume(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const fileData = {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          data: e.target.result // base64 data URL
+        };
+        
+        await chrome.storage.local.set({
+          resumeFileName: file.name,
+          resumeFileData: fileData
+        });
+        
+        document.getElementById('resumeFileName').textContent = file.name;
+        document.getElementById('resumeStatus').textContent = `Resume saved (${(file.size / 1024).toFixed(1)} KB)`;
+        document.getElementById('resumeStatus').style.color = '#155724';
+        
+        showStatus(`Resume "${file.name}" saved successfully`, 'success');
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function handleResumeSelection() {
+  const fileInput = document.getElementById('resumeFile');
+  fileInput.click();
+}
+
+async function handleResumeFileChange(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Check file size (limit to 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    showStatus('Resume file is too large. Maximum size is 5MB.', 'error');
+    return;
+  }
+  
+  // Check file type
+  const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  if (!allowedTypes.includes(file.type)) {
+    showStatus('Please select a PDF or Word document (.pdf, .doc, .docx)', 'error');
+    return;
+  }
+  
+  try {
+    await saveResume(file);
+  } catch (error) {
+    console.error('Error saving resume:', error);
+    showStatus('Error saving resume file', 'error');
+  }
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
   loadJobUrls();
+  loadResume();
   
   document.getElementById('addUrls').addEventListener('click', addUrls);
   document.getElementById('openNext').addEventListener('click', openNextJob);
   document.getElementById('openAll').addEventListener('click', openAllJobs);
   document.getElementById('clearList').addEventListener('click', clearList);
   document.getElementById('clickApply').addEventListener('click', clickApplyOnCurrentTab);
+  document.getElementById('selectResume').addEventListener('click', handleResumeSelection);
+  document.getElementById('resumeFile').addEventListener('change', handleResumeFileChange);
   
   // Allow Enter key to add URLs (with Ctrl/Cmd)
   document.getElementById('jobUrls').addEventListener('keydown', (e) => {
