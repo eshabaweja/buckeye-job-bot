@@ -159,19 +159,24 @@ async function openAllJobs() {
   const count = remainingUrls.length;
   
   try {
-    // Open all remaining URLs
-    for (let i = 0; i < remainingUrls.length; i++) {
-      // Open first one active, rest inactive
-      await chrome.tabs.create({ 
-        url: remainingUrls[i], 
-        active: i === 0 
-      });
-      currentIndex++;
-    }
-    
+    // Update index immediately to prevent duplicate opens
+    currentIndex += count;
     await saveJobUrls();
+    
+    // Create all tabs in parallel without blocking
+    // Open first tab active, rest inactive to avoid popup closing
+    remainingUrls.forEach((url, i) => {
+      chrome.tabs.create({ 
+        url: url, 
+        active: i === 0 
+      }).catch(err => {
+        console.error(`Error opening tab ${url}:`, err);
+      });
+    });
+    
+    // Update UI immediately (popup might close after first tab opens)
     updateUI();
-    showStatus(`Opened ${count} job(s)`, 'success');
+    showStatus(`Opening ${count} job(s)...`, 'success');
   } catch (error) {
     console.error('Error opening tabs:', error);
     showStatus('Error opening some job URLs', 'error');
