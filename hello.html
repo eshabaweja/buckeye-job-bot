@@ -138,6 +138,57 @@
     </div>
 
     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
+      <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Voluntary Disclosures:</div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Sex:</label>
+        <select id="sexAnswer" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">Select answer...</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Non-binary">Non-binary</option>
+          <option value="Prefer not to answer">Prefer not to answer</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Hispanic or Latino:</label>
+        <select id="hispanicAnswer" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">Select answer...</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+          <option value="None of the above">None of the above</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Race (select one or more):</label>
+        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Hold Ctrl/Cmd to select multiple</div>
+        <select id="raceAnswer" multiple style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; min-height: 80px;">
+          <option value="American Indian or Alaska Native (United States of America)">American Indian or Alaska Native</option>
+          <option value="Asian (United States of America)">Asian</option>
+          <option value="Black or African American (United States of America)">Black or African American</option>
+          <option value="Native Hawaiian or Other Pacific Islander (United States of America)">Native Hawaiian or Other Pacific Islander</option>
+          <option value="Not Indicated (United States of America)">Not Indicated</option>
+          <option value="White (United States of America)">White</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Veteran Status:</label>
+        <select id="veteranAnswer" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">Select answer...</option>
+          <option value="I am a veteran">I am a veteran</option>
+          <option value="I am not a veteran">I am not a veteran</option>
+          <option value="Prefer not to answer">Prefer not to answer</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: flex; align-items: center; font-size: 12px; color: #333;">
+          <input type="checkbox" id="termsAgreement" style="margin-right: 6px;">
+          Agree to Terms and Conditions
+        </label>
+      </div>
+      <div id="disclosuresStatus" style="font-size: 11px; color: #666; margin-top: 4px;"></div>
+    </div>
+
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
       <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Current Tab Actions:</div>
       <button id="clickApply" class="button-secondary">Click Apply Button</button>
     </div>

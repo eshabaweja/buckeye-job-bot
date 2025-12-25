@@ -335,6 +335,83 @@ function updateAnswersStatus() {
   }
 }
 
+// Voluntary disclosures management
+async function loadVoluntaryDisclosures() {
+  try {
+    const result = await chrome.storage.local.get(['voluntaryDisclosures']);
+    if (result.voluntaryDisclosures) {
+      const disclosures = result.voluntaryDisclosures;
+      if (disclosures.sex) {
+        document.getElementById('sexAnswer').value = disclosures.sex;
+      }
+      if (disclosures.hispanic) {
+        document.getElementById('hispanicAnswer').value = disclosures.hispanic;
+      }
+      if (disclosures.race && Array.isArray(disclosures.race)) {
+        const raceSelect = document.getElementById('raceAnswer');
+        Array.from(raceSelect.options).forEach(option => {
+          option.selected = disclosures.race.includes(option.value);
+        });
+      }
+      if (disclosures.veteran) {
+        document.getElementById('veteranAnswer').value = disclosures.veteran;
+      }
+      if (disclosures.termsAgreement !== undefined) {
+        document.getElementById('termsAgreement').checked = disclosures.termsAgreement;
+      }
+      updateDisclosuresStatus();
+    }
+  } catch (error) {
+    console.error('Error loading voluntary disclosures:', error);
+  }
+}
+
+async function saveVoluntaryDisclosures() {
+  const sexAnswer = document.getElementById('sexAnswer').value;
+  const hispanicAnswer = document.getElementById('hispanicAnswer').value;
+  const raceSelect = document.getElementById('raceAnswer');
+  const raceAnswers = Array.from(raceSelect.selectedOptions).map(opt => opt.value);
+  const veteranAnswer = document.getElementById('veteranAnswer').value;
+  const termsAgreement = document.getElementById('termsAgreement').checked;
+  
+  const disclosures = {
+    sex: sexAnswer,
+    hispanic: hispanicAnswer,
+    race: raceAnswers,
+    veteran: veteranAnswer,
+    termsAgreement: termsAgreement
+  };
+  
+  try {
+    await chrome.storage.local.set({ voluntaryDisclosures: disclosures });
+    updateDisclosuresStatus();
+    showStatus('Voluntary disclosures saved', 'success');
+  } catch (error) {
+    console.error('Error saving voluntary disclosures:', error);
+    showStatus('Error saving disclosures', 'error');
+  }
+}
+
+function updateDisclosuresStatus() {
+  const sexAnswer = document.getElementById('sexAnswer').value;
+  const hispanicAnswer = document.getElementById('hispanicAnswer').value;
+  const raceSelect = document.getElementById('raceAnswer');
+  const raceAnswers = Array.from(raceSelect.selectedOptions).map(opt => opt.value);
+  const veteranAnswer = document.getElementById('veteranAnswer').value;
+  const termsAgreement = document.getElementById('termsAgreement').checked;
+  const statusDiv = document.getElementById('disclosuresStatus');
+  
+  const required = sexAnswer && hispanicAnswer && raceAnswers.length > 0 && veteranAnswer && termsAgreement;
+  
+  if (required) {
+    statusDiv.textContent = 'All disclosures saved and ready';
+    statusDiv.style.color = '#155724';
+  } else {
+    statusDiv.textContent = 'Please complete all required fields';
+    statusDiv.style.color = '#666';
+  }
+}
+
 // Resume management functions
 async function loadResume() {
   try {
@@ -416,6 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadJobUrls();
   loadResume();
   loadQuestionnaireAnswers();
+  loadVoluntaryDisclosures();
   
   document.getElementById('addUrls').addEventListener('click', addUrls);
   document.getElementById('openNext').addEventListener('click', openNextJob);
@@ -426,6 +504,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('resumeFile').addEventListener('change', handleResumeFileChange);
   document.getElementById('employeeAnswer').addEventListener('change', saveQuestionnaireAnswers);
   document.getElementById('enrolledAnswer').addEventListener('change', saveQuestionnaireAnswers);
+  document.getElementById('sexAnswer').addEventListener('change', saveVoluntaryDisclosures);
+  document.getElementById('hispanicAnswer').addEventListener('change', saveVoluntaryDisclosures);
+  document.getElementById('raceAnswer').addEventListener('change', saveVoluntaryDisclosures);
+  document.getElementById('veteranAnswer').addEventListener('change', saveVoluntaryDisclosures);
+  document.getElementById('termsAgreement').addEventListener('change', saveVoluntaryDisclosures);
   
   // Allow Enter key to add URLs (with Ctrl/Cmd)
   document.getElementById('jobUrls').addEventListener('keydown', (e) => {

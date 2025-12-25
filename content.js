@@ -423,7 +423,26 @@ async function uploadResumeAndContinue() {
                   if (employeeDropdown || enrolledDropdown) {
                     clearInterval(checkForQuestionnaire);
                     console.log('Workday Extension: Detected questionnaire page after My Experience');
-                    await checkAndHandleQuestionnairePage();
+                    const handled = await checkAndHandleQuestionnairePage();
+                    // After questionnaire, wait for Voluntary Disclosures
+                    if (handled) {
+                      setTimeout(async () => {
+                        let vdAttempts = 0;
+                        const maxVDAttempts = 30;
+                        const checkForVoluntaryDisclosures = setInterval(async () => {
+                          vdAttempts++;
+                          const vdIndicator = document.querySelector('[data-automation-id="taskOrchCurrentItemLabel"]');
+                          if (vdIndicator && vdIndicator.textContent?.trim() === 'Voluntary Disclosures') {
+                            clearInterval(checkForVoluntaryDisclosures);
+                            console.log('Workday Extension: Detected Voluntary Disclosures page after questionnaire');
+                            await checkAndHandleVoluntaryDisclosuresPage();
+                          } else if (vdAttempts >= maxVDAttempts) {
+                            clearInterval(checkForVoluntaryDisclosures);
+                            console.log('Workday Extension: Timeout waiting for Voluntary Disclosures page');
+                          }
+                        }, 500);
+                      }, 2000);
+                    }
                   } else if (qAttempts >= maxQAttempts) {
                     clearInterval(checkForQuestionnaire);
                     console.log('Workday Extension: Timeout waiting for questionnaire page');
@@ -610,11 +629,270 @@ async function checkAndHandleQuestionnairePage() {
         });
         
         console.log('Workday Extension: Next button clicked on questionnaire page');
+        
+        // After clicking Next on questionnaire, wait for Voluntary Disclosures page
+        setTimeout(async () => {
+          let vdAttempts = 0;
+          const maxVDAttempts = 30;
+          const checkForVoluntaryDisclosures = setInterval(async () => {
+            vdAttempts++;
+            const vdIndicator = document.querySelector('[data-automation-id="taskOrchCurrentItemLabel"]');
+            if (vdIndicator && vdIndicator.textContent?.trim() === 'Voluntary Disclosures') {
+              clearInterval(checkForVoluntaryDisclosures);
+              console.log('Workday Extension: Detected Voluntary Disclosures page after questionnaire');
+              await checkAndHandleVoluntaryDisclosuresPage();
+            } else if (vdAttempts >= maxVDAttempts) {
+              clearInterval(checkForVoluntaryDisclosures);
+              console.log('Workday Extension: Timeout waiting for Voluntary Disclosures page');
+            }
+          }, 500);
+        }, 2000);
+        
         return true;
       }
     }
     
     return true; // Return true even if Next button not found, we tried to answer
+  }
+  
+  return false;
+}
+
+// Function to find radio button group by label
+function findRadioGroupByLabel(labelText) {
+  const labels = document.querySelectorAll('label[data-automation-id="formLabel"]');
+  for (const label of labels) {
+    const text = label.textContent?.trim() || '';
+    if (text.includes(labelText)) {
+      const labelFor = label.getAttribute('for');
+      if (labelFor) {
+        const radioGroup = document.getElementById(labelFor);
+        if (radioGroup && radioGroup.getAttribute('data-automation-id') === 'selectOneRadioGroup') {
+          return radioGroup;
+        }
+      }
+      // Alternative: find radio group near the label
+      const fieldSet = label.closest('[data-automation-id="fieldSetBody"]');
+      if (fieldSet) {
+        const radioGroup = fieldSet.querySelector('[data-automation-id="selectOneRadioGroup"]');
+        if (radioGroup) {
+          return radioGroup;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Function to find checkbox group by label
+function findCheckboxGroupByLabel(labelText) {
+  const labels = document.querySelectorAll('label[data-automation-id="formLabel"]');
+  for (const label of labels) {
+    const text = label.textContent?.trim() || '';
+    if (text.includes(labelText)) {
+      const labelFor = label.getAttribute('for');
+      if (labelFor) {
+        const checkboxGroup = document.getElementById(labelFor);
+        if (checkboxGroup && checkboxGroup.getAttribute('data-automation-id') === 'selectMany') {
+          return checkboxGroup;
+        }
+      }
+      // Alternative: find checkbox group near the label
+      const fieldSet = label.closest('[data-automation-id="fieldSetBody"]');
+      if (fieldSet) {
+        const checkboxGroup = fieldSet.querySelector('[data-automation-id="selectMany"]');
+        if (checkboxGroup) {
+          return checkboxGroup;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Function to find checkbox by label
+function findCheckboxByLabel(labelText) {
+  const labels = document.querySelectorAll('label[data-automation-id="formLabel"]');
+  for (const label of labels) {
+    const text = label.textContent?.trim() || '';
+    if (text.includes(labelText)) {
+      const labelFor = label.getAttribute('for');
+      if (labelFor) {
+        const checkbox = document.getElementById(labelFor);
+        if (checkbox && checkbox.type === 'checkbox') {
+          return checkbox;
+        }
+      }
+      // Alternative: find checkbox near the label
+      const fieldSet = label.closest('[data-automation-id="fieldSetBody"]');
+      if (fieldSet) {
+        const checkbox = fieldSet.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+          return checkbox;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Function to select radio button option
+async function selectRadioOption(radioGroup, optionText) {
+  try {
+    const radioButtons = radioGroup.querySelectorAll('input[type="radio"]');
+    for (const radio of radioButtons) {
+      const label = radio.closest('[data-automation-id="radioBtn"]')?.querySelector('label');
+      if (label) {
+        const text = label.textContent?.trim() || '';
+        if (text === optionText || text.toLowerCase() === optionText.toLowerCase()) {
+          radio.click();
+          await new Promise(resolve => setTimeout(resolve, 300));
+          console.log(`Workday Extension: Selected "${optionText}" in radio group`);
+          return true;
+        }
+      }
+    }
+    console.log(`Workday Extension: Option "${optionText}" not found in radio group`);
+    return false;
+  } catch (error) {
+    console.error('Workday Extension: Error selecting radio option:', error);
+    return false;
+  }
+}
+
+// Function to select checkbox options
+async function selectCheckboxOptions(checkboxGroup, optionTexts) {
+  try {
+    const checkboxes = checkboxGroup.querySelectorAll('[data-automation-id="checkbox"]');
+    for (const checkboxDiv of checkboxes) {
+      const checkbox = checkboxDiv.querySelector('input[type="checkbox"]');
+      const label = checkboxDiv.querySelector('label');
+      if (checkbox && label) {
+        const text = label.textContent?.trim() || '';
+        const shouldBeChecked = optionTexts.some(opt => 
+          text === opt || text.includes(opt.split('(')[0].trim())
+        );
+        if (shouldBeChecked && !checkbox.checked) {
+          checkbox.click();
+          await new Promise(resolve => setTimeout(resolve, 200));
+          console.log(`Workday Extension: Checked "${text}"`);
+        }
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error('Workday Extension: Error selecting checkboxes:', error);
+    return false;
+  }
+}
+
+// Auto-detect Voluntary Disclosures page and fill answers
+async function checkAndHandleVoluntaryDisclosuresPage() {
+  // Look for the specific "Voluntary Disclosures" indicator element
+  const voluntaryDisclosuresIndicator = document.querySelector('[data-automation-id="taskOrchCurrentItemLabel"]');
+  
+  // Check if the indicator exists and contains "Voluntary Disclosures"
+  const isVoluntaryDisclosuresPage = voluntaryDisclosuresIndicator && 
+    voluntaryDisclosuresIndicator.textContent?.trim() === 'Voluntary Disclosures';
+  
+  if (isVoluntaryDisclosuresPage) {
+    console.log('Workday Extension: Detected Voluntary Disclosures page');
+    
+    // Get stored answers
+    const result = await chrome.storage.local.get(['voluntaryDisclosures']);
+    if (!result.voluntaryDisclosures) {
+      console.log('Workday Extension: No voluntary disclosures stored');
+      return false;
+    }
+    
+    const disclosures = result.voluntaryDisclosures;
+    
+    // Wait a bit for page to be fully ready
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    let allFilled = true;
+    
+    // Fill sex dropdown
+    if (disclosures.sex) {
+      const sexDropdown = findDropdownByLabel('select your sex');
+      if (sexDropdown) {
+        const filled = await selectDropdownOption(sexDropdown, disclosures.sex);
+        if (!filled) allFilled = false;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Fill Hispanic/Latino radio
+    if (disclosures.hispanic) {
+      const hispanicRadio = findRadioGroupByLabel('Hispanic or Latino');
+      if (hispanicRadio) {
+        const filled = await selectRadioOption(hispanicRadio, disclosures.hispanic);
+        if (!filled) allFilled = false;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Fill race checkboxes
+    if (disclosures.race && disclosures.race.length > 0) {
+      const raceCheckboxes = findCheckboxGroupByLabel('select the race');
+      if (raceCheckboxes) {
+        await selectCheckboxOptions(raceCheckboxes, disclosures.race);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Fill veteran status dropdown
+    if (disclosures.veteran) {
+      const veteranDropdown = findDropdownByLabel('select your Veteran status');
+      if (veteranDropdown) {
+        const filled = await selectDropdownOption(veteranDropdown, disclosures.veteran);
+        if (!filled) allFilled = false;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Check terms agreement checkbox
+    if (disclosures.termsAgreement) {
+      const termsCheckbox = findCheckboxByLabel('I hereby agree to the Terms and Conditions');
+      if (termsCheckbox && !termsCheckbox.checked) {
+        termsCheckbox.click();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('Workday Extension: Checked terms agreement');
+      }
+    }
+    
+    if (allFilled || disclosures.termsAgreement) {
+      console.log('Workday Extension: All voluntary disclosures filled');
+      
+      // Wait a bit then click Next
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const nextButton = findNextButton();
+      if (nextButton) {
+        console.log('Workday Extension: Found Next button on Voluntary Disclosures page');
+        nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Click the button
+        nextButton.click();
+        
+        // Also dispatch mouse events
+        const mouseEvents = ['mousedown', 'mouseup', 'click'];
+        mouseEvents.forEach(eventType => {
+          const event = new MouseEvent(eventType, {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          });
+          nextButton.dispatchEvent(event);
+        });
+        
+        console.log('Workday Extension: Next button clicked on Voluntary Disclosures page');
+        return true;
+      }
+    }
+    
+    return true; // Return true even if Next button not found, we tried to fill
   }
   
   return false;
@@ -668,11 +946,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'clickApply') {
     clickApplyButton().then(result => {
       sendResponse(result);
-      // After clicking apply, check if we're on Quick Apply page, My Experience page, or questionnaire
+      // After clicking apply, check if we're on Quick Apply page, My Experience page, questionnaire, or Voluntary Disclosures
       setTimeout(async () => {
         if (!checkAndHandleQuickApplyPage()) {
           if (!checkAndHandleMyExperiencePage()) {
-            await checkAndHandleQuestionnairePage();
+            if (!(await checkAndHandleQuestionnairePage())) {
+              await checkAndHandleVoluntaryDisclosuresPage();
+            }
           }
         }
       }, 3000);
@@ -733,10 +1013,12 @@ window.addEventListener('load', () => {
       console.log('Workday Extension: Apply button not found on this page');
     }
     
-    // Check for Quick Apply page first, then My Experience page, then questionnaire
+    // Check for Quick Apply page first, then My Experience page, then questionnaire, then Voluntary Disclosures
     if (!checkAndHandleQuickApplyPage()) {
       if (!checkAndHandleMyExperiencePage()) {
-        await checkAndHandleQuestionnairePage();
+        if (!(await checkAndHandleQuestionnairePage())) {
+          await checkAndHandleVoluntaryDisclosuresPage();
+        }
       }
     }
   }, 1000);
@@ -748,7 +1030,9 @@ if (document.readyState === 'loading') {
     setTimeout(async () => {
       if (!checkAndHandleQuickApplyPage()) {
         if (!checkAndHandleMyExperiencePage()) {
-          await checkAndHandleQuestionnairePage();
+          if (!(await checkAndHandleQuestionnairePage())) {
+            await checkAndHandleVoluntaryDisclosuresPage();
+          }
         }
       }
     }, 2000);
@@ -757,7 +1041,9 @@ if (document.readyState === 'loading') {
   setTimeout(async () => {
     if (!checkAndHandleQuickApplyPage()) {
       if (!checkAndHandleMyExperiencePage()) {
-        await checkAndHandleQuestionnairePage();
+        if (!(await checkAndHandleQuestionnairePage())) {
+          await checkAndHandleVoluntaryDisclosuresPage();
+        }
       }
     }
   }, 2000);

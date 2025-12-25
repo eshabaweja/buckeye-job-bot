@@ -55,3 +55,4 @@ listener @ background.js:72
 - My Experience page: Detects the page using [data-automation-id="taskOrchCurrentItemLabel"] → clicks Next
 - Application Questions page asks: Are you an employee of OSU and Are you a student at OSU? Must answer using answers to those questions from local storage
 - Answer the Voluntary Disclosures section
+- Answer the final Self-identification of disability, sign by full name and today's date, then go to next
