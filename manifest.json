@@ -1,6 +1,6 @@
 {
-    "name": "Hello Extension",
-    "description": "Base Level Extension",
+    "name": "Workday Job Application Helper",
+    "description": "Helps you apply to jobs on your university's Workday by managing and traversing job URLs",
     "version": "1.0",
     "manifest_version": 3,
     "action": {
@@ -11,5 +11,13 @@
       "16": "hello_extensions.png",
       "48": "hello_extensions.png",
       "128": "hello_extensions.png"
-    }
+    },
+    "permissions": [
+      "tabs",
+      "storage"
+    ],
+    "host_permissions": [
+      "https://*.myworkdayjobs.com/*",
+      "https://*.workday.com/*"
+    ]
   }
