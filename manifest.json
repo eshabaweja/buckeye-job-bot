@@ -12,12 +12,28 @@
       "48": "hello_extensions.png",
       "128": "hello_extensions.png"
     },
+    "background": {
+      "service_worker": "background.js"
+    },
     "permissions": [
       "tabs",
-      "storage"
+      "storage",
+      "scripting"
     ],
     "host_permissions": [
       "https://*.myworkdayjobs.com/*",
+      "https://*.myworkday.com/*",
       "https://*.workday.com/*"
+    ],
+    "content_scripts": [
+      {
+        "matches": [
+          "https://*.myworkdayjobs.com/*",
+          "https://*.myworkday.com/*",
+          "https://*.workday.com/*"
+        ],
+        "js": ["content.js"],
+        "run_at": "document_idle"
+      }
     ]
   }

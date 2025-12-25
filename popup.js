@@ -122,7 +122,7 @@ function addUrls() {
   }
 }
 
-// Open next job URL
+// Open next job URL and click apply (delegates to background script)
 async function openNextJob() {
   if (currentIndex >= jobUrls.length) {
     showStatus('All jobs have been opened!', 'info');
@@ -132,23 +132,39 @@ async function openNextJob() {
   const url = jobUrls[currentIndex];
   
   try {
-    await chrome.tabs.create({ url: url, active: true });
-    currentIndex++;
-    await saveJobUrls();
-    updateUI();
+    showStatus(`Opening job ${currentIndex + 1} of ${jobUrls.length}...`, 'info');
     
-    if (currentIndex >= jobUrls.length) {
-      showStatus('All jobs opened!', 'success');
+    // Send message to background script to handle opening and clicking
+    const response = await chrome.runtime.sendMessage({
+      action: 'openNextJob',
+      url: url,
+      active: true
+    });
+    
+    if (response && response.success) {
+      currentIndex++;
+      await saveJobUrls();
+      updateUI();
+      
+      if (response.result && response.result.success) {
+        showStatus(`Job ${currentIndex} opened and apply clicked!`, 'success');
+      } else {
+        showStatus(`Job ${currentIndex} opened. ${response.result?.message || 'Apply button not found'}`, 'info');
+      }
+      
+      if (currentIndex >= jobUrls.length) {
+        showStatus('All jobs processed!', 'success');
+      }
     } else {
-      showStatus(`Opening job ${currentIndex} of ${jobUrls.length}`, 'info');
+      showStatus(`Error: ${response?.error || 'Failed to open job'}`, 'error');
     }
   } catch (error) {
-    console.error('Error opening tab:', error);
-    showStatus('Error opening job URL', 'error');
+    console.error('Error opening job:', error);
+    showStatus(`Error: ${error.message}`, 'error');
   }
 }
 
-// Open all remaining jobs
+// Open all remaining jobs and click apply on each (delegates to background script)
 async function openAllJobs() {
   if (currentIndex >= jobUrls.length) {
     showStatus('All jobs have been opened!', 'info');
@@ -157,31 +173,30 @@ async function openAllJobs() {
   
   const remainingUrls = jobUrls.slice(currentIndex);
   const count = remainingUrls.length;
+  const startIndex = currentIndex;
   
   try {
-    // Update index immediately to prevent duplicate opens
-    currentIndex += count;
-    await saveJobUrls();
+    showStatus(`Queuing ${count} job(s) to open and click apply...`, 'info');
     
-    // Create all tabs in parallel without blocking
-    // Open first tab active, rest inactive to avoid popup closing
-    remainingUrls.forEach((url, i) => {
-      chrome.tabs.create({ 
-        url: url, 
-        active: i === 0 
-      }).catch(err => {
-        console.error(`Error opening tab ${url}:`, err);
-      });
+    // Send message to background script to handle all jobs
+    const response = await chrome.runtime.sendMessage({
+      action: 'openAllJobs',
+      urls: remainingUrls,
+      startIndex: startIndex
     });
     
-    // Update UI immediately (popup might close after first tab opens)
-    updateUI();
-    showStatus(`Opening ${count} job(s)...`, 'success');
+    if (response && response.success) {
+      // Update index immediately since background will process them
+      currentIndex += count;
+      await saveJobUrls();
+      updateUI();
+      showStatus(`Processing ${count} job(s) in background...`, 'info');
+    } else {
+      showStatus(`Error: ${response?.error || 'Failed to queue jobs'}`, 'error');
+    }
   } catch (error) {
-    console.error('Error opening tabs:', error);
-    showStatus('Error opening some job URLs', 'error');
-    await saveJobUrls();
-    updateUI();
+    console.error('Error opening jobs:', error);
+    showStatus(`Error: ${error.message}`, 'error');
   }
 }
 
@@ -201,6 +216,73 @@ async function clearList() {
   }
 }
 
+// Click apply button on current tab
+async function clickApplyOnCurrentTab() {
+  try {
+    // Get the current active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!tab) {
+      showStatus('No active tab found', 'error');
+      return;
+    }
+    
+    // Check if it's a Workday URL
+    const isWorkdayUrl = tab.url && (
+      tab.url.includes('myworkdayjobs.com') || 
+      tab.url.includes('myworkday.com') ||
+      tab.url.includes('workday.com')
+    );
+    
+    if (!isWorkdayUrl) {
+      showStatus('Current tab is not a Workday page', 'error');
+      return;
+    }
+    
+    showStatus('Clicking apply button...', 'info');
+    
+    // Send message to content script
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'clickApply' });
+    
+    if (response && response.success) {
+      showStatus(response.message || 'Apply button clicked!', 'success');
+    } else {
+      showStatus(response?.message || 'Failed to click apply button', 'error');
+    }
+  } catch (error) {
+    console.error('Error clicking apply button:', error);
+    if (error.message.includes('Could not establish connection')) {
+      showStatus('Content script not loaded. Please refresh the page.', 'error');
+    } else {
+      showStatus(`Error: ${error.message}`, 'error');
+    }
+  }
+}
+
+// Listen for messages from background script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'jobProcessed') {
+    // Update current index when a job is processed
+    if (request.jobNumber > currentIndex) {
+      currentIndex = request.jobNumber;
+      saveJobUrls();
+      updateUI();
+    }
+    
+    // Show status if popup is open
+    if (request.result && request.result.success) {
+      showStatus(`Job ${request.jobNumber} processed: Apply clicked!`, 'success');
+    } else {
+      showStatus(`Job ${request.jobNumber} processed: ${request.result?.message || 'Apply not found'}`, 'info');
+    }
+  }
+  
+  if (request.action === 'allJobsProcessed') {
+    showStatus('All jobs processed!', 'success');
+    updateUI();
+  }
+});
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
   loadJobUrls();
@@ -209,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('openNext').addEventListener('click', openNextJob);
   document.getElementById('openAll').addEventListener('click', openAllJobs);
   document.getElementById('clearList').addEventListener('click', clearList);
+  document.getElementById('clickApply').addEventListener('click', clickApplyOnCurrentTab);
   
   // Allow Enter key to add URLs (with Ctrl/Cmd)
   document.getElementById('jobUrls').addEventListener('keydown', (e) => {
