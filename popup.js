@@ -283,6 +283,58 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// Questionnaire answers management
+async function loadQuestionnaireAnswers() {
+  try {
+    const result = await chrome.storage.local.get(['questionnaireAnswers']);
+    if (result.questionnaireAnswers) {
+      const answers = result.questionnaireAnswers;
+      if (answers.employee) {
+        document.getElementById('employeeAnswer').value = answers.employee;
+      }
+      if (answers.enrolled) {
+        document.getElementById('enrolledAnswer').value = answers.enrolled;
+      }
+      updateAnswersStatus();
+    }
+  } catch (error) {
+    console.error('Error loading questionnaire answers:', error);
+  }
+}
+
+async function saveQuestionnaireAnswers() {
+  const employeeAnswer = document.getElementById('employeeAnswer').value;
+  const enrolledAnswer = document.getElementById('enrolledAnswer').value;
+  
+  const answers = {
+    employee: employeeAnswer,
+    enrolled: enrolledAnswer
+  };
+  
+  try {
+    await chrome.storage.local.set({ questionnaireAnswers: answers });
+    updateAnswersStatus();
+    showStatus('Questionnaire answers saved', 'success');
+  } catch (error) {
+    console.error('Error saving questionnaire answers:', error);
+    showStatus('Error saving answers', 'error');
+  }
+}
+
+function updateAnswersStatus() {
+  const employeeAnswer = document.getElementById('employeeAnswer').value;
+  const enrolledAnswer = document.getElementById('enrolledAnswer').value;
+  const statusDiv = document.getElementById('answersStatus');
+  
+  if (employeeAnswer && enrolledAnswer) {
+    statusDiv.textContent = 'Answers saved and ready';
+    statusDiv.style.color = '#155724';
+  } else {
+    statusDiv.textContent = 'Please select answers for both questions';
+    statusDiv.style.color = '#666';
+  }
+}
+
 // Resume management functions
 async function loadResume() {
   try {
@@ -363,6 +415,7 @@ async function handleResumeFileChange(event) {
 document.addEventListener('DOMContentLoaded', () => {
   loadJobUrls();
   loadResume();
+  loadQuestionnaireAnswers();
   
   document.getElementById('addUrls').addEventListener('click', addUrls);
   document.getElementById('openNext').addEventListener('click', openNextJob);
@@ -371,6 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('clickApply').addEventListener('click', clickApplyOnCurrentTab);
   document.getElementById('selectResume').addEventListener('click', handleResumeSelection);
   document.getElementById('resumeFile').addEventListener('change', handleResumeFileChange);
+  document.getElementById('employeeAnswer').addEventListener('change', saveQuestionnaireAnswers);
+  document.getElementById('enrolledAnswer').addEventListener('change', saveQuestionnaireAnswers);
   
   // Allow Enter key to add URLs (with Ctrl/Cmd)
   document.getElementById('jobUrls').addEventListener('keydown', (e) => {

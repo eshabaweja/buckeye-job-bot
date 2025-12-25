@@ -409,6 +409,27 @@ async function uploadResumeAndContinue() {
               });
               
               console.log('Workday Extension: Next button clicked on My Experience page');
+              
+              // After clicking Next on My Experience, wait for questionnaire page
+              setTimeout(async () => {
+                let qAttempts = 0;
+                const maxQAttempts = 30;
+                
+                const checkForQuestionnaire = setInterval(async () => {
+                  qAttempts++;
+                  const employeeDropdown = findDropdownByLabel('active employee');
+                  const enrolledDropdown = findDropdownByLabel('currently enrolled');
+                  
+                  if (employeeDropdown || enrolledDropdown) {
+                    clearInterval(checkForQuestionnaire);
+                    console.log('Workday Extension: Detected questionnaire page after My Experience');
+                    await checkAndHandleQuestionnairePage();
+                  } else if (qAttempts >= maxQAttempts) {
+                    clearInterval(checkForQuestionnaire);
+                    console.log('Workday Extension: Timeout waiting for questionnaire page');
+                  }
+                }, 500);
+              }, 2000);
             }, 500);
           } else if (attempts >= maxAttempts) {
             clearInterval(checkForMyExperience);
@@ -447,6 +468,155 @@ function checkAndHandleQuickApplyPage() {
     }, 2000);
     return true;
   }
+  return false;
+}
+
+// Function to find dropdown by label text
+function findDropdownByLabel(labelText) {
+  // Find all labels
+  const labels = document.querySelectorAll('label[data-automation-id="formLabel"]');
+  for (const label of labels) {
+    const text = label.textContent?.trim() || '';
+    if (text.includes(labelText)) {
+      // Find the associated dropdown
+      const labelFor = label.getAttribute('for');
+      if (labelFor) {
+        const dropdown = document.getElementById(labelFor);
+        if (dropdown && dropdown.getAttribute('data-automation-id') === 'selectWidget') {
+          return dropdown;
+        }
+      }
+      // Alternative: find dropdown near the label
+      const fieldSet = label.closest('[data-automation-id="fieldSetBody"]');
+      if (fieldSet) {
+        const dropdown = fieldSet.querySelector('[data-automation-id="selectWidget"]');
+        if (dropdown) {
+          return dropdown;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Function to select option in dropdown
+async function selectDropdownOption(dropdown, optionText) {
+  try {
+    // Click to open dropdown
+    dropdown.click();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Find all option elements
+    const options = document.querySelectorAll('[role="option"], [data-automation-id="selectOption"]');
+    for (const option of options) {
+      const text = option.textContent?.trim() || '';
+      if (text === optionText || text.toLowerCase() === optionText.toLowerCase()) {
+        option.click();
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log(`Workday Extension: Selected "${optionText}" in dropdown`);
+        return true;
+      }
+    }
+    
+    // If not found, try clicking the dropdown again and look for options
+    dropdown.click();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Look for options in expanded dropdown
+    const expandedOptions = document.querySelectorAll('[role="option"], [data-automation-id="selectOption"], .gwt-ListBox-item');
+    for (const option of expandedOptions) {
+      const text = option.textContent?.trim() || '';
+      if (text === optionText || text.toLowerCase() === optionText.toLowerCase()) {
+        option.click();
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log(`Workday Extension: Selected "${optionText}" in dropdown (second attempt)`);
+        return true;
+      }
+    }
+    
+    console.log(`Workday Extension: Option "${optionText}" not found in dropdown`);
+    return false;
+  } catch (error) {
+    console.error('Workday Extension: Error selecting dropdown option:', error);
+    return false;
+  }
+}
+
+// Auto-detect questionnaire page and fill answers
+async function checkAndHandleQuestionnairePage() {
+  // Check if we're on a questionnaire page (has dropdowns with questions)
+  const employeeDropdown = findDropdownByLabel('active employee');
+  const enrolledDropdown = findDropdownByLabel('currently enrolled');
+  
+  if (employeeDropdown || enrolledDropdown) {
+    console.log('Workday Extension: Detected questionnaire page');
+    
+    // Get stored answers
+    const result = await chrome.storage.local.get(['questionnaireAnswers']);
+    if (!result.questionnaireAnswers) {
+      console.log('Workday Extension: No questionnaire answers stored');
+      return false;
+    }
+    
+    const answers = result.questionnaireAnswers;
+    
+    // Wait a bit for page to be fully ready
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    let allAnswered = true;
+    
+    // Answer employee question
+    if (employeeDropdown && answers.employee) {
+      const answered = await selectDropdownOption(employeeDropdown, answers.employee);
+      if (!answered) {
+        allAnswered = false;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Answer enrolled question
+    if (enrolledDropdown && answers.enrolled) {
+      const answered = await selectDropdownOption(enrolledDropdown, answers.enrolled);
+      if (!answered) {
+        allAnswered = false;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    if (allAnswered) {
+      console.log('Workday Extension: All questionnaire answers filled');
+      
+      // Wait a bit then click Next
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const nextButton = findNextButton();
+      if (nextButton) {
+        console.log('Workday Extension: Found Next button on questionnaire page');
+        nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Click the button
+        nextButton.click();
+        
+        // Also dispatch mouse events
+        const mouseEvents = ['mousedown', 'mouseup', 'click'];
+        mouseEvents.forEach(eventType => {
+          const event = new MouseEvent(eventType, {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          });
+          nextButton.dispatchEvent(event);
+        });
+        
+        console.log('Workday Extension: Next button clicked on questionnaire page');
+        return true;
+      }
+    }
+    
+    return true; // Return true even if Next button not found, we tried to answer
+  }
+  
   return false;
 }
 
@@ -498,10 +668,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'clickApply') {
     clickApplyButton().then(result => {
       sendResponse(result);
-      // After clicking apply, check if we're on Quick Apply page or My Experience page
-      setTimeout(() => {
+      // After clicking apply, check if we're on Quick Apply page, My Experience page, or questionnaire
+      setTimeout(async () => {
         if (!checkAndHandleQuickApplyPage()) {
-          checkAndHandleMyExperiencePage();
+          if (!checkAndHandleMyExperiencePage()) {
+            await checkAndHandleQuestionnairePage();
+          }
         }
       }, 3000);
     }).catch(error => {
@@ -511,6 +683,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     });
     return true; // Keep channel open for async response
+  }
+  
+  if (request.action === 'fillQuestionnaire') {
+    checkAndHandleQuestionnairePage().then(result => {
+      sendResponse({ success: result });
+    }).catch(error => {
+      sendResponse({ success: false, message: error.message });
+    });
+    return true;
   }
   
   if (request.action === 'uploadResume') {
@@ -544,7 +725,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Auto-detect and log apply button on page load (for debugging)
 window.addEventListener('load', () => {
-  setTimeout(() => {
+  setTimeout(async () => {
     const button = findApplyButton();
     if (button) {
       console.log('Workday Extension: Apply button found:', button.textContent.trim());
@@ -552,9 +733,11 @@ window.addEventListener('load', () => {
       console.log('Workday Extension: Apply button not found on this page');
     }
     
-    // Check for Quick Apply page first, then My Experience page
+    // Check for Quick Apply page first, then My Experience page, then questionnaire
     if (!checkAndHandleQuickApplyPage()) {
-      checkAndHandleMyExperiencePage();
+      if (!checkAndHandleMyExperiencePage()) {
+        await checkAndHandleQuestionnairePage();
+      }
     }
   }, 1000);
 });
@@ -562,16 +745,20 @@ window.addEventListener('load', () => {
 // Also check when DOM is ready (in case load event already fired)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
+    setTimeout(async () => {
       if (!checkAndHandleQuickApplyPage()) {
-        checkAndHandleMyExperiencePage();
+        if (!checkAndHandleMyExperiencePage()) {
+          await checkAndHandleQuestionnairePage();
+        }
       }
     }, 2000);
   });
 } else {
-  setTimeout(() => {
+  setTimeout(async () => {
     if (!checkAndHandleQuickApplyPage()) {
-      checkAndHandleMyExperiencePage();
+      if (!checkAndHandleMyExperiencePage()) {
+        await checkAndHandleQuestionnairePage();
+      }
     }
   }, 2000);
 }

@@ -117,6 +117,27 @@
     </div>
 
     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
+      <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Questionnaire Answers:</div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Active OSU Employee?</label>
+        <select id="employeeAnswer" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">Select answer...</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Currently Enrolled at OSU?</label>
+        <select id="enrolledAnswer" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">Select answer...</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+      <div id="answersStatus" style="font-size: 11px; color: #666; margin-top: 4px;"></div>
+    </div>
+
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
       <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Current Tab Actions:</div>
       <button id="clickApply" class="button-secondary">Click Apply Button</button>
     </div>

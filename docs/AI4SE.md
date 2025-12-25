@@ -54,4 +54,4 @@ listener @ background.js:72
 - No inputs on My Experience page, click Next again
 - My Experience page: Detects the page using [data-automation-id="taskOrchCurrentItemLabel"] → clicks Next
 - Application Questions page asks: Are you an employee of OSU and Are you a student at OSU? Must answer using answers to those questions from local storage
-- 
+- Answer the Voluntary Disclosures section
