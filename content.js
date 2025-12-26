@@ -888,6 +888,179 @@ async function checkAndHandleVoluntaryDisclosuresPage() {
         });
         
         console.log('Workday Extension: Next button clicked on Voluntary Disclosures page');
+        
+        // After clicking Next on Voluntary Disclosures, wait for Self Identify page
+        setTimeout(async () => {
+          let siAttempts = 0;
+          const maxSIAttempts = 30;
+          const checkForSelfIdentify = setInterval(async () => {
+            siAttempts++;
+            const siIndicator = document.querySelector('[data-automation-id="taskOrchCurrentItemLabel"]');
+            if (siIndicator && siIndicator.textContent?.trim() === 'Self Identify') {
+              clearInterval(checkForSelfIdentify);
+              console.log('Workday Extension: Detected Self Identify page after Voluntary Disclosures');
+              await checkAndHandleSelfIdentifyPage();
+            } else if (siAttempts >= maxSIAttempts) {
+              clearInterval(checkForSelfIdentify);
+              console.log('Workday Extension: Timeout waiting for Self Identify page');
+            }
+          }, 500);
+        }, 2000);
+        
+        return true;
+      }
+    }
+    
+    return true; // Return true even if Next button not found, we tried to fill
+  }
+  
+  return false;
+}
+
+// Function to find text input by label
+function findTextInputByLabel(labelText) {
+  const labels = document.querySelectorAll('label[data-automation-id="formLabel"]');
+  for (const label of labels) {
+    const text = label.textContent?.trim() || '';
+    if (text.includes(labelText)) {
+      const labelFor = label.getAttribute('for');
+      if (labelFor) {
+        const input = document.getElementById(labelFor);
+        if (input && (input.type === 'text' || input.tagName === 'INPUT')) {
+          return input;
+        }
+      }
+      // Alternative: find input near the label
+      const fieldSet = label.closest('[data-automation-id="fieldSetBody"]');
+      if (fieldSet) {
+        const input = fieldSet.querySelector('input[type="text"]');
+        if (input) {
+          return input;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+
+// Auto-detect Self Identify (Disability) page and fill form
+async function checkAndHandleSelfIdentifyPage() {
+  // Look for the specific "Self Identify" indicator element
+  const selfIdentifyIndicator = document.querySelector('[data-automation-id="taskOrchCurrentItemLabel"]');
+  
+  // Check if the indicator exists and contains "Self Identify"
+  const isSelfIdentifyPage = selfIdentifyIndicator && 
+    selfIdentifyIndicator.textContent?.trim() === 'Self Identify';
+  
+  if (isSelfIdentifyPage) {
+    console.log('Workday Extension: Detected Self Identify page');
+    
+    // Get stored disability info
+    const result = await chrome.storage.local.get(['disabilityInfo']);
+    if (!result.disabilityInfo) {
+      console.log('Workday Extension: No disability information stored');
+      return false;
+    }
+    
+    const info = result.disabilityInfo;
+    
+    // Wait a bit for page to be fully ready
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    let allFilled = true;
+    
+    // Fill name
+    if (info.name) {
+      const nameInput = findTextInputByLabel('Name');
+      if (nameInput) {
+        nameInput.value = info.name;
+        nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+        nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('Workday Extension: Filled name:', info.name);
+      } else {
+        allFilled = false;
+      }
+    }
+    
+    // Fill employee ID (optional)
+    if (info.employeeId) {
+      const employeeIdInput = findTextInputByLabel('Employee ID');
+      if (employeeIdInput) {
+        employeeIdInput.value = info.employeeId;
+        employeeIdInput.dispatchEvent(new Event('input', { bubbles: true }));
+        employeeIdInput.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('Workday Extension: Filled employee ID:', info.employeeId);
+      }
+    }
+    
+    // Fill date by clicking date picker button and then today's date
+    const datePickerButton = document.querySelector('[data-automation-id="datePickerButton"]');
+    if (datePickerButton) {
+      console.log('Workday Extension: Found date picker button, clicking...');
+      datePickerButton.click();
+    }
+
+    const todayDateButton = document.querySelector('[data-automation-id="datePickerSelectedToday"]');
+    if (todayDateButton) {
+      console.log('Workday Extension: Found today\'s date button, clicking...');
+      todayDateButton.click();
+    }
+    
+    // Fill disability status checkbox
+    if (info.status) {
+      const disabilityCheckboxGroup = findCheckboxGroupByLabel('Please check one of the boxes below');
+      if (disabilityCheckboxGroup) {
+        const checkboxes = disabilityCheckboxGroup.querySelectorAll('[data-automation-id="checkbox"]');
+        for (const checkboxDiv of checkboxes) {
+          const checkbox = checkboxDiv.querySelector('input[type="checkbox"]');
+          const label = checkboxDiv.querySelector('label');
+          if (checkbox && label) {
+            const text = label.textContent?.trim() || '';
+            if (text === info.status) {
+              if (!checkbox.checked) {
+                checkbox.click();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                console.log('Workday Extension: Selected disability status:', info.status);
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        allFilled = false;
+      }
+    }
+    
+    if (allFilled || info.status) {
+      console.log('Workday Extension: All disability information filled');
+      
+      // Wait a bit then click Next
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const nextButton = findNextButton();
+      if (nextButton) {
+        console.log('Workday Extension: Found Next button on Self Identify page');
+        nextButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Click the button
+        nextButton.click();
+        
+        // Also dispatch mouse events
+        const mouseEvents = ['mousedown', 'mouseup', 'click'];
+        mouseEvents.forEach(eventType => {
+          const event = new MouseEvent(eventType, {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          });
+          nextButton.dispatchEvent(event);
+        });
+        
+        console.log('Workday Extension: Next button clicked on Self Identify page');
         return true;
       }
     }
@@ -946,12 +1119,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'clickApply') {
     clickApplyButton().then(result => {
       sendResponse(result);
-      // After clicking apply, check if we're on Quick Apply page, My Experience page, questionnaire, or Voluntary Disclosures
+      // After clicking apply, check if we're on Quick Apply page, My Experience page, questionnaire, Voluntary Disclosures, or Self Identify
       setTimeout(async () => {
         if (!checkAndHandleQuickApplyPage()) {
           if (!checkAndHandleMyExperiencePage()) {
             if (!(await checkAndHandleQuestionnairePage())) {
-              await checkAndHandleVoluntaryDisclosuresPage();
+              if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
+                await checkAndHandleSelfIdentifyPage();
+              }
             }
           }
         }
@@ -1013,11 +1188,13 @@ window.addEventListener('load', () => {
       console.log('Workday Extension: Apply button not found on this page');
     }
     
-    // Check for Quick Apply page first, then My Experience page, then questionnaire, then Voluntary Disclosures
+    // Check for Quick Apply page first, then My Experience page, then questionnaire, then Voluntary Disclosures, then Self Identify
     if (!checkAndHandleQuickApplyPage()) {
       if (!checkAndHandleMyExperiencePage()) {
         if (!(await checkAndHandleQuestionnairePage())) {
-          await checkAndHandleVoluntaryDisclosuresPage();
+          if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
+            await checkAndHandleSelfIdentifyPage();
+          }
         }
       }
     }
@@ -1031,7 +1208,9 @@ if (document.readyState === 'loading') {
       if (!checkAndHandleQuickApplyPage()) {
         if (!checkAndHandleMyExperiencePage()) {
           if (!(await checkAndHandleQuestionnairePage())) {
-            await checkAndHandleVoluntaryDisclosuresPage();
+            if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
+              await checkAndHandleSelfIdentifyPage();
+            }
           }
         }
       }
@@ -1042,7 +1221,9 @@ if (document.readyState === 'loading') {
     if (!checkAndHandleQuickApplyPage()) {
       if (!checkAndHandleMyExperiencePage()) {
         if (!(await checkAndHandleQuestionnairePage())) {
-          await checkAndHandleVoluntaryDisclosuresPage();
+          if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
+            await checkAndHandleSelfIdentifyPage();
+          }
         }
       }
     }

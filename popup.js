@@ -412,6 +412,65 @@ function updateDisclosuresStatus() {
   }
 }
 
+// Disability self-identification management
+async function loadDisabilityInfo() {
+  try {
+    const result = await chrome.storage.local.get(['disabilityInfo']);
+    if (result.disabilityInfo) {
+      const info = result.disabilityInfo;
+      if (info.name) {
+        document.getElementById('disabilityName').value = info.name;
+      }
+      if (info.employeeId) {
+        document.getElementById('disabilityEmployeeId').value = info.employeeId;
+      }
+      if (info.status) {
+        document.getElementById('disabilityStatus').value = info.status;
+      }
+      updateDisabilityStatus();
+    }
+  } catch (error) {
+    console.error('Error loading disability info:', error);
+  }
+}
+
+async function saveDisabilityInfo() {
+  const name = document.getElementById('disabilityName').value.trim();
+  const employeeId = document.getElementById('disabilityEmployeeId').value.trim();
+  const status = document.getElementById('disabilityStatus').value;
+  
+  const info = {
+    name: name,
+    employeeId: employeeId,
+    status: status
+  };
+  
+  try {
+    await chrome.storage.local.set({ disabilityInfo: info });
+    updateDisabilityStatus();
+    showStatus('Disability information saved', 'success');
+  } catch (error) {
+    console.error('Error saving disability info:', error);
+    showStatus('Error saving disability info', 'error');
+  }
+}
+
+function updateDisabilityStatus() {
+  const name = document.getElementById('disabilityName').value.trim();
+  const status = document.getElementById('disabilityStatus').value;
+  const statusDiv = document.getElementById('disabilityStatusIndicator');
+  
+  const required = name && status;
+  
+  if (required) {
+    statusDiv.textContent = 'Disability information saved and ready';
+    statusDiv.style.color = '#155724';
+  } else {
+    statusDiv.textContent = 'Please enter name and select disability status';
+    statusDiv.style.color = '#666';
+  }
+}
+
 // Resume management functions
 async function loadResume() {
   try {
@@ -494,6 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadResume();
   loadQuestionnaireAnswers();
   loadVoluntaryDisclosures();
+  loadDisabilityInfo();
   
   document.getElementById('addUrls').addEventListener('click', addUrls);
   document.getElementById('openNext').addEventListener('click', openNextJob);
@@ -509,6 +569,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('raceAnswer').addEventListener('change', saveVoluntaryDisclosures);
   document.getElementById('veteranAnswer').addEventListener('change', saveVoluntaryDisclosures);
   document.getElementById('termsAgreement').addEventListener('change', saveVoluntaryDisclosures);
+  document.getElementById('disabilityName').addEventListener('input', saveDisabilityInfo);
+  document.getElementById('disabilityEmployeeId').addEventListener('input', saveDisabilityInfo);
+  document.getElementById('disabilityStatus').addEventListener('change', saveDisabilityInfo);
   
   // Allow Enter key to add URLs (with Ctrl/Cmd)
   document.getElementById('jobUrls').addEventListener('keydown', (e) => {

@@ -189,6 +189,28 @@
     </div>
 
     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
+      <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Self Identification (Disability):</div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Full Name (for signature):</label>
+        <input type="text" id="disabilityName" placeholder="Your full name" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Employee ID (optional):</label>
+        <input type="text" id="disabilityEmployeeId" placeholder="Leave blank if not applicable" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #333;">Disability Status:</label>
+        <select id="disabilityStatus" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+          <option value="">Select answer...</option>
+          <option value="Yes, I have a disability, or have had one in the past">Yes, I have a disability, or have had one in the past</option>
+          <option value="No, I do not have a disability and have not had one in the past">No, I do not have a disability and have not had one in the past</option>
+          <option value="I do not want to answer">I do not want to answer</option>
+        </select>
+      </div>
+      <div id="disabilityStatusIndicator" style="font-size: 11px; color: #666; margin-top: 4px;"></div>
+    </div>
+
+    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd;">
       <div style="font-size: 13px; font-weight: 500; margin-bottom: 8px;">Current Tab Actions:</div>
       <button id="clickApply" class="button-secondary">Click Apply Button</button>
     </div>
