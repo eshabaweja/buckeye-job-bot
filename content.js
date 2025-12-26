@@ -287,6 +287,52 @@ function findNextButton() {
   return null;
 }
 
+// Function to find Submit button
+function findSubmitButton() {
+  const selectors = [
+    'button[data-automation-id="wd-CommandButton_next"][title="Submit"]',
+    'button[title="Submit"]',
+    'button[data-automation-button-type="PRIMARY"][title="Submit"]',
+    'button[aria-label*="Submit"]',
+    'button[aria-label*="submit"]'
+  ];
+  
+  for (const selector of selectors) {
+    try {
+      const button = document.querySelector(selector);
+      if (button) {
+        const text = (button.textContent || '').trim().toLowerCase();
+        const title = (button.getAttribute('title') || '').toLowerCase();
+        const ariaLabel = (button.getAttribute('aria-label') || '').toLowerCase();
+        if (text.includes('submit') || title === 'submit' || ariaLabel.includes('submit')) {
+          return button;
+        }
+      }
+    } catch (e) {
+      // Invalid selector, continue
+    }
+  }
+  
+  // Search all buttons
+  const allButtons = document.querySelectorAll('button');
+  for (const button of allButtons) {
+    const text = (button.textContent || '').trim().toLowerCase();
+    const title = (button.getAttribute('title') || '').toLowerCase();
+    const ariaLabel = (button.getAttribute('aria-label') || '').toLowerCase();
+    const dataAutomationId = (button.getAttribute('data-automation-id') || '').toLowerCase();
+    
+    if ((text === 'submit' || text.includes('submit')) && 
+        (title === 'submit' || dataAutomationId.includes('next'))) {
+      return button;
+    }
+    if (title === 'submit' || ariaLabel.includes('submit')) {
+      return button;
+    }
+  }
+  
+  return null;
+}
+
 // Function to upload resume and click next
 async function uploadResumeAndContinue() {
   try {
@@ -1061,6 +1107,44 @@ async function checkAndHandleSelfIdentifyPage() {
         });
         
         console.log('Workday Extension: Next button clicked on Self Identify page');
+        
+        // After clicking Next on Self Identify, wait for Submit button
+        setTimeout(async () => {
+          let submitAttempts = 0;
+          const maxSubmitAttempts = 30;
+          const checkForSubmit = setInterval(async () => {
+            submitAttempts++;
+            const submitButton = findSubmitButton();
+            if (submitButton) {
+              clearInterval(checkForSubmit);
+              console.log('Workday Extension: Found Submit button after Self Identify');
+              
+              // Scroll into view
+              submitButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // Click the button
+              submitButton.click();
+              
+              // Also dispatch mouse events
+              const mouseEvents = ['mousedown', 'mouseup', 'click'];
+              mouseEvents.forEach(eventType => {
+                const event = new MouseEvent(eventType, {
+                  view: window,
+                  bubbles: true,
+                  cancelable: true
+                });
+                submitButton.dispatchEvent(event);
+              });
+              
+              console.log('Workday Extension: Submit button clicked successfully');
+            } else if (submitAttempts >= maxSubmitAttempts) {
+              clearInterval(checkForSubmit);
+              console.log('Workday Extension: Timeout waiting for Submit button');
+            }
+          }, 500);
+        }, 2000);
+        
         return true;
       }
     }
@@ -1068,6 +1152,37 @@ async function checkAndHandleSelfIdentifyPage() {
     return true; // Return true even if Next button not found, we tried to fill
   }
   
+  return false;
+}
+
+// Auto-detect Submit page and click Submit button
+async function checkAndHandleSubmitPage() {
+  const submitButton = findSubmitButton();
+  if (submitButton) {
+    console.log('Workday Extension: Detected Submit page');
+    // Wait a bit for page to be fully ready
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    submitButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Click the button
+    submitButton.click();
+    
+    // Also dispatch mouse events
+    const mouseEvents = ['mousedown', 'mouseup', 'click'];
+    mouseEvents.forEach(eventType => {
+      const event = new MouseEvent(eventType, {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      });
+      submitButton.dispatchEvent(event);
+    });
+    
+    console.log('Workday Extension: Submit button clicked');
+    return true;
+  }
   return false;
 }
 
@@ -1119,13 +1234,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'clickApply') {
     clickApplyButton().then(result => {
       sendResponse(result);
-      // After clicking apply, check if we're on Quick Apply page, My Experience page, questionnaire, Voluntary Disclosures, or Self Identify
+      // After clicking apply, check if we're on Quick Apply page, My Experience page, questionnaire, Voluntary Disclosures, Self Identify, or Submit
       setTimeout(async () => {
         if (!checkAndHandleQuickApplyPage()) {
           if (!checkAndHandleMyExperiencePage()) {
             if (!(await checkAndHandleQuestionnairePage())) {
               if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
-                await checkAndHandleSelfIdentifyPage();
+                if (!(await checkAndHandleSelfIdentifyPage())) {
+                  await checkAndHandleSubmitPage();
+                }
               }
             }
           }
@@ -1188,12 +1305,14 @@ window.addEventListener('load', () => {
       console.log('Workday Extension: Apply button not found on this page');
     }
     
-    // Check for Quick Apply page first, then My Experience page, then questionnaire, then Voluntary Disclosures, then Self Identify
+    // Check for Quick Apply page first, then My Experience page, then questionnaire, then Voluntary Disclosures, then Self Identify, then Submit
     if (!checkAndHandleQuickApplyPage()) {
       if (!checkAndHandleMyExperiencePage()) {
         if (!(await checkAndHandleQuestionnairePage())) {
           if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
-            await checkAndHandleSelfIdentifyPage();
+            if (!(await checkAndHandleSelfIdentifyPage())) {
+              await checkAndHandleSubmitPage();
+            }
           }
         }
       }
@@ -1209,7 +1328,9 @@ if (document.readyState === 'loading') {
         if (!checkAndHandleMyExperiencePage()) {
           if (!(await checkAndHandleQuestionnairePage())) {
             if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
-              await checkAndHandleSelfIdentifyPage();
+              if (!(await checkAndHandleSelfIdentifyPage())) {
+                await checkAndHandleSubmitPage();
+              }
             }
           }
         }
@@ -1222,7 +1343,9 @@ if (document.readyState === 'loading') {
       if (!checkAndHandleMyExperiencePage()) {
         if (!(await checkAndHandleQuestionnairePage())) {
           if (!(await checkAndHandleVoluntaryDisclosuresPage())) {
-            await checkAndHandleSelfIdentifyPage();
+            if (!(await checkAndHandleSelfIdentifyPage())) {
+              await checkAndHandleSubmitPage();
+            }
           }
         }
       }
